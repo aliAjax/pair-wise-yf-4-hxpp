@@ -29,3 +29,15 @@ export interface SceneFormData {
   pedestrianStatus: PedestrianStatus
   note: string
 }
+
+/** 行程方向：去程（返程开端之前）/ 回程（自返程开端起） */
+export type Direction = 'outbound' | 'inbound'
+
+/** 灵感抽取的分段筛选，all 表示不区分分段 */
+export type DirectionFilter = Direction | 'all'
+
+/**
+ * 返程开端标记：线路名 -> 被标记记录的 id。
+ * 独立于窗景记录存储，原记录与笔记不做任何改动。
+ */
+export type ReturnMarks = Record<string, string>

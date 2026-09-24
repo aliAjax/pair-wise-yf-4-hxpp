@@ -8,14 +8,32 @@ import {
   formatTimestamp,
   getTimeOfDay,
 } from '@/utils/sceneHelpers'
-import { Lightbulb, RefreshCw, Quote, Bus, ArrowRight } from 'lucide-react'
+import { getSceneDirection, DIRECTION_LABEL } from '@/utils/timelineSegments'
+import type { DirectionFilter } from '@/types'
+import {
+  Lightbulb,
+  RefreshCw,
+  Quote,
+  Bus,
+  ArrowRight,
+  Flag,
+  Layers,
+} from 'lucide-react'
+
+const FILTERS: { value: DirectionFilter; label: string }[] = [
+  { value: 'all', label: '全程' },
+  { value: 'outbound', label: '去程' },
+  { value: 'inbound', label: '回程' },
+]
 
 export default function InspirePage() {
-  const { randomScene, refreshRandom, loadAll, scenes } = useSceneStore()
+  const { randomScene, refreshRandom, loadAll, scenes, returnMarks } =
+    useSceneStore()
   const [revealed, setRevealed] = useState(false)
   const [displayedPrompt, setDisplayedPrompt] = useState('')
   const [isTyping, setIsTyping] = useState(false)
   const [isSpinning, setIsSpinning] = useState(false)
+  const [direction, setDirection] = useState<DirectionFilter>('all')
 
   useEffect(() => {
     loadAll()
@@ -42,20 +60,33 @@ export default function InspirePage() {
   }, [revealed, randomScene])
 
   const handlePick = useCallback(() => {
-    refreshRandom()
+    refreshRandom(direction)
     setRevealed(true)
     setIsSpinning(false)
-  }, [refreshRandom])
+  }, [refreshRandom, direction])
 
   const handleRefresh = useCallback(() => {
     setIsSpinning(true)
     setRevealed(false)
     setTimeout(() => {
-      refreshRandom()
+      refreshRandom(direction)
       setRevealed(true)
       setIsSpinning(false)
     }, 400)
-  }, [refreshRandom])
+  }, [refreshRandom, direction])
+
+  // 灵感抽取按当前分段读取：切换分段后，已展示的卡片也立刻按新分段重抽
+  const handleFilterChange = (next: DirectionFilter) => {
+    if (next === direction) return
+    setDirection(next)
+    if (revealed) {
+      refreshRandom(next)
+    }
+  }
+
+  const randomDirection = randomScene
+    ? getSceneDirection(randomScene, scenes, returnMarks)
+    : null
 
   if (scenes.length === 0) {
     return (
@@ -69,6 +100,26 @@ export default function InspirePage() {
 
   return (
     <div className="min-h-screen bg-teal-950 flex flex-col items-center px-4 py-8">
+      <div className="mb-6 flex items-center gap-2 rounded-full border border-teal-800 bg-teal-900/50 p-1">
+        {FILTERS.map((f) => (
+          <button
+            key={f.value}
+            onClick={() => handleFilterChange(f.value)}
+            className={`rounded-full px-4 py-1.5 text-xs transition-colors ${
+              direction === f.value
+                ? 'bg-dusk-400 text-teal-950'
+                : 'text-mist-300 hover:bg-teal-800'
+            }`}
+          >
+            {f.value === 'all' && (
+              <Layers className="mr-1 inline w-3 h-3" />
+            )}
+            {f.value === 'inbound' && <Flag className="mr-1 inline w-3 h-3" />}
+            {f.label}
+          </button>
+        ))}
+      </div>
+
       {!revealed ? (
         <div className="flex-1 flex flex-col items-center justify-center">
           <button
@@ -81,8 +132,14 @@ export default function InspirePage() {
           >
             <div className="absolute inset-3 rounded-full border border-dusk-400/20" />
             <Bus className="w-10 h-10 text-dusk-400 group-hover:scale-110 transition-transform duration-300" />
-            <span className="text-mist-100 font-serif text-lg tracking-wide">采一段窗景</span>
-            <span className="text-dusk-400/60 text-xs">点击随机采集</span>
+            <span className="text-mist-100 font-serif text-lg tracking-wide">
+              采一段窗景
+            </span>
+            <span className="text-dusk-400/60 text-xs">
+              {direction === 'all'
+                ? '点击随机采集'
+                : `只从${DIRECTION_LABEL[direction]}记录中采集`}
+            </span>
           </button>
           <style>{`
             @keyframes float {
@@ -108,14 +165,32 @@ export default function InspirePage() {
             <div className="flex items-center justify-between text-sm text-mist-400">
               <div className="flex items-center gap-2">
                 <ArrowRight className="w-3.5 h-3.5 text-dusk-400" />
-                <span className="text-mist-100 font-medium">{randomScene.routeName}</span>
+                <span className="text-mist-100 font-medium">
+                  {randomScene.routeName}
+                </span>
                 <span className="text-mist-500">·</span>
                 <span>{randomScene.segment}</span>
+                {randomDirection && (
+                  <span
+                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] ${
+                      randomDirection === 'inbound'
+                        ? 'bg-dusk-400/15 text-dusk-300'
+                        : 'bg-teal-800/70 text-mist-300'
+                    }`}
+                  >
+                    {randomDirection === 'inbound' && (
+                      <Flag className="w-2.5 h-2.5" />
+                    )}
+                    {DIRECTION_LABEL[randomDirection]}
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <span>{getTimeOfDay(randomScene.timestamp)}</span>
                 <span className="text-mist-500">·</span>
-                <span>{formatTimestamp(randomScene.timestamp).split(' ')[1]}</span>
+                <span>
+                  {formatTimestamp(randomScene.timestamp).split(' ')[1]}
+                </span>
                 {getWeatherIcon(randomScene.weather)}
               </div>
             </div>
@@ -166,7 +241,23 @@ export default function InspirePage() {
             <span className="font-serif text-sm">再采一段</span>
           </button>
         </div>
-      ) : null}
+      ) : (
+        <div className="flex-1 flex flex-col items-center justify-center text-center">
+          <Flag className="w-10 h-10 text-dusk-400/40 mb-4" />
+          <p className="font-serif text-mist-200 mb-1">
+            {direction === 'outbound'
+              ? '还没有去程记录'
+              : direction === 'inbound'
+                ? '还没有回程记录'
+                : '没有可采集的窗景'}
+          </p>
+          <p className="text-mist-500 text-sm">
+            {direction === 'outbound'
+              ? '返程开端标记之前的记录才算去程，可在时间线页调整标记'
+              : '自返程开端起的记录才算回程，可在时间线页设置标记'}
+          </p>
+        </div>
+      )}
     </div>
   )
 }
