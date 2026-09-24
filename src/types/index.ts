@@ -19,6 +19,13 @@ export interface WindowScene {
   note: string
 }
 
+export type SegmentKey = 'outbound' | 'return'
+
+export type SegmentFilter = 'all' | SegmentKey
+
+/** routeName -> 返程起点记录 id，每条线路至多一个 */
+export type RouteSplitMap = Record<string, string>
+
 export interface SceneFormData {
   routeName: string
   segment: string

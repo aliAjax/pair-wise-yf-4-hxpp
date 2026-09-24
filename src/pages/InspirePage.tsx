@@ -8,14 +8,27 @@ import {
   formatTimestamp,
   getTimeOfDay,
 } from '@/utils/sceneHelpers'
+import {
+  SEGMENT_LABELS,
+  filterScenesBySegment,
+  getSceneSegmentFromAll,
+} from '@/utils/segmentation'
+import type { SegmentFilter } from '@/types'
 import { Lightbulb, RefreshCw, Quote, Bus, ArrowRight } from 'lucide-react'
 
+const SEGMENT_TABS: { key: SegmentFilter; label: string }[] = [
+  { key: 'all', label: '全部' },
+  { key: 'outbound', label: SEGMENT_LABELS.outbound },
+  { key: 'return', label: SEGMENT_LABELS.return },
+]
+
 export default function InspirePage() {
-  const { randomScene, refreshRandom, loadAll, scenes } = useSceneStore()
+  const { randomScene, refreshRandom, loadAll, scenes, routeSplits } = useSceneStore()
   const [revealed, setRevealed] = useState(false)
   const [displayedPrompt, setDisplayedPrompt] = useState('')
   const [isTyping, setIsTyping] = useState(false)
   const [isSpinning, setIsSpinning] = useState(false)
+  const [segment, setSegment] = useState<SegmentFilter>('all')
 
   useEffect(() => {
     loadAll()
@@ -42,20 +55,25 @@ export default function InspirePage() {
   }, [revealed, randomScene])
 
   const handlePick = useCallback(() => {
-    refreshRandom()
+    refreshRandom(segment)
     setRevealed(true)
     setIsSpinning(false)
-  }, [refreshRandom])
+  }, [refreshRandom, segment])
 
   const handleRefresh = useCallback(() => {
     setIsSpinning(true)
     setRevealed(false)
     setTimeout(() => {
-      refreshRandom()
+      refreshRandom(segment)
       setRevealed(true)
       setIsSpinning(false)
     }, 400)
-  }, [refreshRandom])
+  }, [refreshRandom, segment])
+
+  const handleSegmentChange = (next: SegmentFilter) => {
+    setSegment(next)
+    if (revealed) refreshRandom(next)
+  }
 
   if (scenes.length === 0) {
     return (
@@ -67,8 +85,33 @@ export default function InspirePage() {
     )
   }
 
+  const segmentCounts: Record<SegmentFilter, number> = {
+    all: scenes.length,
+    outbound: filterScenesBySegment(scenes, routeSplits, 'outbound').length,
+    return: filterScenesBySegment(scenes, routeSplits, 'return').length,
+  }
+
   return (
     <div className="min-h-screen bg-teal-950 flex flex-col items-center px-4 py-8">
+      <div className="mb-8 flex items-center gap-2">
+        {SEGMENT_TABS.map((tab) => (
+          <button
+            key={tab.key}
+            disabled={segmentCounts[tab.key] === 0}
+            onClick={() => handleSegmentChange(tab.key)}
+            className={`rounded-full px-4 py-1.5 text-xs transition-colors ${
+              segment === tab.key
+                ? 'bg-dusk-400 text-teal-950'
+                : segmentCounts[tab.key] === 0
+                  ? 'cursor-not-allowed bg-dusk-400/5 text-mist-500/50'
+                  : 'bg-dusk-400/10 text-mist-300 hover:bg-dusk-400/20'
+            }`}
+          >
+            {tab.label} · {segmentCounts[tab.key]}
+          </button>
+        ))}
+      </div>
+
       {!revealed ? (
         <div className="flex-1 flex flex-col items-center justify-center">
           <button
@@ -111,6 +154,14 @@ export default function InspirePage() {
                 <span className="text-mist-100 font-medium">{randomScene.routeName}</span>
                 <span className="text-mist-500">·</span>
                 <span>{randomScene.segment}</span>
+                {routeSplits[randomScene.routeName] && (
+                  <>
+                    <span className="text-mist-500">·</span>
+                    <span className="text-dusk-300">
+                      {SEGMENT_LABELS[getSceneSegmentFromAll(randomScene, scenes, routeSplits)]}
+                    </span>
+                  </>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <span>{getTimeOfDay(randomScene.timestamp)}</span>
@@ -166,7 +217,13 @@ export default function InspirePage() {
             <span className="font-serif text-sm">再采一段</span>
           </button>
         </div>
-      ) : null}
+      ) : (
+        <div className="flex-1 flex flex-col items-center justify-center text-center">
+          <Bus className="w-12 h-12 text-dusk-400/40 mb-4" />
+          <p className="text-mist-100 font-serif mb-2">该分段暂无窗景记录</p>
+          <p className="text-mist-400 text-sm">切换上方分段，或先去记录几段窗景</p>
+        </div>
+      )}
     </div>
   )
 }
